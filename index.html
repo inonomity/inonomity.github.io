@@ -1,0 +1,1681 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lahori Gates: Guardians of the Walled City</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=VT323&display=swap');
+
+        body { font-family: 'VT323', monospace; }
+        .font-royal { font-family: 'Cinzel', serif; }
+
+        /* Map Animations */
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* City Shape Styling */
+        .walled-city-shape {
+            border-radius: 43% 57% 53% 47% / 55% 44% 56% 45%;
+        }
+
+        /* Minigame Shake Effect */
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(28, 25, 23, 0.95);
+            border-left: 4px solid #f59e0b;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            font-family: 'Cinzel', serif;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-out;
+            pointer-events: auto;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.error { border-left-color: #ef4444; }
+        .toast.success { border-left-color: #22c55e; }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+            z-index: 50; display: none; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+
+        /* Custom Scrollbar for game containers */
+        .game-scroll::-webkit-scrollbar { width: 8px; }
+        .game-scroll::-webkit-scrollbar-track { background: #1c1917; }
+        .game-scroll::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-stone-950 h-screen w-screen overflow-hidden text-stone-200 select-none">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Reset Confirmation Modal -->
+    <div id="resetModal" class="modal-overlay">
+        <div class="bg-stone-800 border-2 border-red-600 p-8 rounded max-w-md text-center shadow-2xl">
+            <h2 class="font-royal text-3xl text-red-500 mb-4">RESET PROGRESS?</h2>
+            <p class="text-stone-300 mb-6">This will erase all collected keys and gate completions. This action cannot be undone.</p>
+            <div class="flex justify-center gap-4">
+                <button onclick="closeModal()" class="px-6 py-2 bg-stone-600 hover:bg-stone-500 text-white rounded">CANCEL</button>
+                <button onclick="confirmReset()" class="px-6 py-2 bg-red-700 hover:bg-red-600 text-white rounded font-bold">YES, RESET</button>
+            </div>
+        </div>
+    </div>
+    
+
+    <!-- ==================== SCENE MAP ==================== -->
+        
+    <!-- ==================== SCENE MAP ==================== -->
+    <div id="scene-map" class="relative w-full h-full flex flex-col items-center justify-center bg-stone-900">
+        <div class="absolute top-5 z-20 text-center w-full px-4">
+            <h1 class="font-royal text-4xl md:text-5xl text-amber-500 tracking-widest drop-shadow-lg">LAHORE WALLED CITY</h1>
+            <p class="text-stone-400 text-xl mt-1">Restore 13 Gates. Keys Found: <span id="totalKeys" class="text-white font-bold">0</span>/12</p>
+            
+            <button onclick="openResetModal()" class="mt-4 text-xs text-stone-500 hover:text-red-400 underline decoration-dotted uppercase tracking-widest">
+                Reset All Progress
+            </button>
+        </div>
+
+        <div class="relative w-[800px] h-[600px] bg-stone-800 rounded-xl shadow-2xl border-4 border-stone-700 p-10 overflow-hidden max-w-[95vw] max-h-[70vh] scale-90 md:scale-100 origin-top">
+
+            <div class="absolute top-[-50px] left-[-50px] w-[300px] h-[300px] bg-blue-900/20 rounded-full blur-3xl"></div>
+
+            <div class="relative w-full h-full bg-stone-700/50 walled-city-shape border-2 border-dashed border-stone-500 shadow-inner">
+
+                <svg class="absolute inset-0 w-full h-full opacity-20 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M400,550 C400,400 350,300 400,50" stroke="currentColor" stroke-width="2" fill="none" class="text-stone-300"/>
+                    <path d="M50,300 C200,300 600,320 750,250" stroke="currentColor" stroke-width="2" fill="none" class="text-stone-300"/>
+                </svg>
+
+                <!-- GATE PINS CONTAINER -->
+                <div id="gate-pins-container" class="absolute inset-0"></div>
+
+                <!-- SHAHI QILA FORT BUTTON (Initially Hidden) -->
+                <div id="fort-container" class="absolute top-[10%] left-[20%] flex flex-col items-center opacity-0 transition-opacity duration-1000 pointer-events-none">
+                    <div class="relative group">
+                        <!-- The Glowing Aura -->
+                        <div id="fort-aura" class="absolute inset-0 rounded-full blur-xl opacity-0 transition-opacity duration-1000 bg-purple-500/50"></div>
+                        
+                        <button id="btn-fort" onclick="openFortBattle()" class="relative w-24 h-24 bg-stone-800 border-4 border-amber-600 rounded-full text-5xl shadow-2xl flex items-center justify-center transition-transform duration-300 hover:scale-110 z-10">
+                            🏰
+                        </button>
+                    </div>
+                    <span class="text-amber-500 font-royal text-sm mt-2 font-bold tracking-widest drop-shadow-md opacity-0 transition-opacity duration-500" id="fort-label">
+                        SHAHI QILA
+                    </span>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="absolute bottom-5 text-stone-500 text-sm text-center px-4">
+            "The Djinn has stolen the memories. Click a glowing gate to enter."
+        </div>
+    </div>
+
+    <!-- ==================== SCENE GAME (LOHARI) ==================== -->
+    <div id="scene-game" class="hidden relative w-full h-full flex items-center justify-center bg-black/90">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-stone-700 hover:bg-stone-600 rounded border border-stone-500 text-white">
+            ← BACK TO MAP
+        </button>
+        <div id="game-container" class="relative w-[800px] h-[600px] bg-stone-800 border-8 border-stone-700 shadow-2xl rounded-lg overflow-hidden">
+            <div class="absolute top-0 left-0 w-full p-4 flex justify-between z-10 pointer-events-none">
+                <div class="flex flex-col">
+                    <span class="text-amber-500 text-2xl font-bold tracking-wider">LOHARI GATE</span>
+                    <span class="text-stone-400 text-lg">Mission: Forge the Royal Sword</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl text-white">SCORE: <span id="scoreDisplay">0</span></div>
+                    <div class="text-amber-400 text-xl">HITS: <span id="hitsDisplay">0</span>/10</div>
+                </div>
+            </div>
+            <canvas id="gameCanvas" width="800" height="600" class="block bg-stone-900"></canvas>
+            <div id="startScreen" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-500 mb-4 font-bold drop-shadow-md">The Blacksmith</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Mughal army needs swords! <br>
+                    Hit <span class="text-amber-400 font-bold">[SPACEBAR]</span> in the <span class="text-green-400 font-bold">GREEN ZONE</span>.
+                </p>
+                <button onclick="startMinigame()" class="px-8 py-3 bg-amber-700 hover:bg-amber-600 text-white text-2xl rounded border-2 border-amber-500 transition-colors">
+                    START FORGING
+                </button>
+            </div>
+            <div id="gameOverScreen" class="hidden absolute inset-0 bg-red-900/90 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-5xl text-white mb-2">FAILED!</h1>
+                <p class="text-xl text-stone-200 mb-6">The metal cooled down.</p>
+                <button onclick="startMinigame()" class="px-6 py-2 bg-stone-700 hover:bg-stone-600 text-white text-xl rounded border border-stone-400">TRY AGAIN</button>
+            </div>
+            <div id="winScreen" class="hidden absolute inset-0 bg-green-900/90 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-5xl text-amber-300 mb-2">SUCCESS!</h1>
+                <p class="text-xl text-stone-200 mb-6">You forged the blade.</p>
+                <div class="text-4xl mb-6 animate-bounce">🗝️</div>
+                <button onclick="completeGate('lohari')" class="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xl rounded border border-amber-400">COLLECT KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE MOCHI ==================== -->
+    <div id="scene-mochi" class="hidden relative w-full h-full flex items-center justify-center bg-sky-400">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-sky-700 hover:bg-sky-600 rounded border border-sky-300 text-white">
+            ← ESCAPE TO STREETS
+        </button>
+        <div id="mochi-container" class="relative w-[800px] h-[600px] bg-sky-300 border-8 border-white/50 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="mochiCanvas" width="800" height="600" class="block cursor-none"></canvas>
+            <div id="startScreenMochi" class="absolute inset-0 bg-blue-900/60 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-6xl text-white mb-2 font-bold drop-shadow-lg">Basant at Mochi</h1>
+                <p class="text-xl text-blue-100 max-w-md mb-8">
+                    The sky is full of rivals! <br>
+                    Move your kite to touch the **Enemy Strings**. <br>
+                    Don't let them touch your **Kite's Body**!
+                </p>
+                <button onclick="startMochiGame()" class="px-8 py-3 bg-yellow-500 hover:bg-yellow-400 text-blue-900 text-2xl font-bold rounded-full shadow-xl transition-transform hover:scale-105">
+                    BO KATA! (START)
+                </button>
+            </div>
+            <div id="winScreenMochi" class="hidden absolute inset-0 bg-amber-500/90 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-white mb-2">VICTORY!</h1>
+                <p class="text-2xl text-white mb-6 font-bold">You are the King of the Skies.</p>
+                <div class="text-6xl mb-6 animate-bounce">🗝️</div>
+                <button onclick="completeGate('mochi')" class="px-8 py-3 bg-white text-amber-600 text-2xl rounded-full font-bold shadow-lg">COLLECT MOCHI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE DELHI ==================== -->
+    <div id="scene-delhi" class="hidden relative w-full h-full flex items-center justify-center bg-orange-100">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-amber-800 hover:bg-amber-700 rounded text-white border border-amber-600">
+            ← ABANDON PROCESSION
+        </button>
+        <div id="delhi-container" class="relative w-[800px] h-[600px] bg-stone-200 border-8 border-stone-800 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="delhiCanvas" width="800" height="600" class="block"></canvas>
+            <div id="startScreenDelhi" class="absolute inset-0 bg-stone-900/80 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-amber-500 mb-4 font-bold">The Royal Entrance</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Emperor's Elephant is coming! <br>
+                    Use <span class="text-amber-400 font-bold">[LEFT / RIGHT ARROWS]</span> to switch lanes. <br>
+                    Clear the path of carts and barrels!
+                </p>
+                <button onclick="startDelhiGame()" class="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white text-2xl font-bold rounded shadow-lg transition-transform hover:scale-105">
+                    CLEAR THE WAY
+                </button>
+            </div>
+            <div id="winScreenDelhi" class="hidden absolute inset-0 bg-emerald-900/90 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">SHAHI WELCOME!</h1>
+                <p class="text-2xl text-white mb-6">The Elephant has reached the Hammam safely.</p>
+                <div class="text-6xl mb-6 animate-bounce">🗝️</div>
+                <button onclick="completeGate('delhi')" class="px-8 py-3 bg-amber-500 text-white text-2xl rounded font-bold">COLLECT DELHI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE TAXALI ==================== -->
+    <div id="scene-taxali" class="hidden relative w-full h-full flex items-center justify-center bg-purple-900">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded text-white border border-purple-400">
+            ← LEAVE THE BAITHAK
+        </button>
+        <div id="taxali-container" class="relative w-[800px] h-[600px] bg-stone-900 border-8 border-amber-600 shadow-2xl rounded-lg overflow-hidden flex flex-col items-center justify-center">
+            <div class="absolute top-5 text-center">
+                <h2 class="font-royal text-3xl text-amber-400">Taxali Musical Duel</h2>
+                <p id="taxaliStatus" class="text-purple-200 text-xl mt-2">Listen to the Ustad's Sitar...</p>
+            </div>
+            <div class="grid grid-cols-2 gap-6 mt-10">
+                <button id="pad-0" onclick="handlePadClick(0)" class="w-40 h-40 bg-red-800 border-4 border-red-400 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 grayscale hover:grayscale-0">
+                    <span class="text-5xl mb-2">🥁</span>
+                    <span class="text-white font-bold">TABLA</span>
+                </button>
+                <button id="pad-1" onclick="handlePadClick(1)" class="w-40 h-40 bg-blue-800 border-4 border-blue-400 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 grayscale hover:grayscale-0">
+                    <span class="text-5xl mb-2">🎸</span>
+                    <span class="text-white font-bold">SITAR</span>
+                </button>
+                <button id="pad-2" onclick="handlePadClick(2)" class="w-40 h-40 bg-green-800 border-4 border-green-400 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 grayscale hover:grayscale-0">
+                    <span class="text-5xl mb-2">🪈</span>
+                    <span class="text-white font-bold">BANSURI</span>
+                </button>
+                <button id="pad-3" onclick="handlePadClick(3)" class="w-40 h-40 bg-amber-800 border-4 border-amber-400 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 grayscale hover:grayscale-0">
+                    <span class="text-5xl mb-2">🎹</span>
+                    <span class="text-white font-bold">SURNAI</span>
+                </button>
+            </div>
+            <div id="startScreenTaxali" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-purple-400 mb-4">The Master's Melody</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Ustad will play a sequence. <br>
+                    Repeat it perfectly to prove your soul. <br>
+                    Reach a streak of <span class="text-amber-400 font-bold">5</span> to win.
+                </p>
+                <button onclick="startTaxaliGame()" class="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white text-2xl font-bold rounded shadow-lg transition-all hover:px-12">
+                    I AM READY, USTAD
+                </button>
+            </div>
+            <div id="winScreenTaxali" class="hidden absolute inset-0 bg-purple-900/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">USTAD STATUS!</h1>
+                <p class="text-2xl text-white mb-6">Your rhythm echoes through the city.</p>
+                <div class="text-6xl mb-6 animate-pulse">🗝️</div>
+                <button onclick="completeGate('taxali')" class="px-8 py-3 bg-amber-500 text-white text-2xl rounded font-bold">COLLECT TAXALI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE SHERANWALA ==================== -->
+    <div id="scene-sheranwala" class="hidden relative w-full h-full flex items-center justify-center bg-green-900">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-emerald-800 hover:bg-emerald-700 rounded text-white border border-emerald-500">
+            ← RETREAT FROM THE BEASTS
+        </button>
+        <div id="sheranwala-container" class="relative w-[800px] h-[600px] bg-stone-800 border-8 border-yellow-700 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="sheranwalaCanvas" width="800" height="600" class="block"></canvas>
+            <div id="startScreenSheranwala" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-yellow-500 mb-4">The Lion's Shadow</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Maharaja's lions are loose! <br>
+                    Use <span class="text-yellow-400 font-bold">[WASD / ARROW KEYS]</span> to move. <br>
+                    Stay out of the **Yellow Sight Cones**. <br>
+                    Reach the **Golden Cage** at the top!
+                </p>
+                <button onclick="startSheranwalaGame()" class="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white text-2xl font-bold rounded shadow-lg transition-transform hover:scale-105">
+                    ENTER THE DEN
+                </button>
+            </div>
+            <div id="winScreenSheranwala" class="hidden absolute inset-0 bg-yellow-900/90 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">LION TAMER!</h1>
+                <p class="text-2xl text-white mb-6">The beasts recognize your courage.</p>
+                <div class="text-6xl mb-6 animate-pulse">🦁🗝️</div>
+                <button onclick="completeGate('sheranwala')" class="px-8 py-3 bg-amber-500 text-white text-2xl rounded font-bold">COLLECT SHERANWALA KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE BHATI ==================== -->
+    <div id="scene-bhati" class="hidden relative w-full h-full flex items-center justify-center bg-stone-200">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-stone-700 hover:bg-stone-600 rounded text-white border border-stone-500">
+            ← CLOSE THE BOOK
+        </button>
+        <div id="bhati-container" class="relative w-[800px] h-[600px] bg-[url('https://www.transparenttextures.com/patterns/parchment.png')] bg-amber-50 border-8 border-stone-800 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="bhatiCanvas" width="800" height="600" class="block"></canvas>
+            <div class="absolute top-5 w-full text-center pointer-events-none">
+                <h2 class="font-royal text-2xl text-stone-800">The Poet's Verse</h2>
+                <div id="verseProgress" class="text-xl text-amber-700 italic mt-2 font-serif">
+                    "___ ___ ___ ___ ___"
+                </div>
+            </div>
+            <div id="startScreenBhati" class="absolute inset-0 bg-stone-900/80 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-amber-400 mb-4 font-bold">The Gate of Literature</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8 italic">
+                    Allama Iqbal's poetry has been scattered by the wind! <br><br>
+                    Catch the falling words in the **Correct Sequence** to restore the light of Bhati Gate.
+                </p>
+                <button onclick="startBhatiGame()" class="px-8 py-3 bg-stone-100 hover:bg-stone-200 text-stone-900 text-2xl font-bold rounded shadow-lg transition-transform hover:scale-105">
+                    RESTORE THE VERSE
+                </button>
+            </div>
+            <div id="winScreenBhati" class="hidden absolute inset-0 bg-stone-800/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-400 mb-2">POETRY RESTORED!</h1>
+                <p class="text-2xl text-white mb-6 font-serif italic" id="finalVerseDisplay"></p>
+                <div class="text-6xl mb-6 animate-pulse">📜🗝️</div>
+                <button onclick="completeGate('bhati')" class="px-8 py-3 bg-amber-600 text-white text-2xl rounded font-bold">COLLECT BHATI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE AKBARI ==================== -->
+    <div id="scene-akbari" class="hidden relative w-full h-full flex items-center justify-center bg-yellow-100">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-yellow-800 hover:bg-yellow-700 rounded text-white border border-yellow-600">
+            ← CLOSE THE MANDI
+        </button>
+        <div id="akbari-container" class="relative w-[800px] h-[600px] bg-stone-100 border-8 border-yellow-900 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="akbariCanvas" width="800" height="600" class="block"></canvas>
+            <div class="absolute top-5 w-full text-center pointer-events-none">
+                <h2 class="font-royal text-3xl text-yellow-900">Akbari Spice Market</h2>
+                <p class="text-xl text-yellow-700 font-bold mt-2">Target: <span id="targetWeightDisplay">500</span>g of Saffron</p>
+            </div>
+            <div id="startScreenAkbari" class="absolute inset-0 bg-stone-900/85 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-yellow-500 mb-4 font-bold">The Honest Merchant</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Emperor's chef requires precise spices! <br><br>
+                    Drag the **Weights** to the left pan and **Spice Sacks** to the right.
+                    Balance the scale perfectly to win.
+                </p>
+                <button onclick="startAkbariGame()" class="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white text-2xl font-bold rounded shadow-lg transition-all">
+                    OPEN THE SHOP
+                </button>
+            </div>
+            <div id="winScreenAkbari" class="hidden absolute inset-0 bg-yellow-900/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">PERFECT BALANCE!</h1>
+                <p class="text-2xl text-white mb-6">Your honesty has earned the Emperor's trust.</p>
+                <div class="text-6xl mb-6 animate-bounce">⚖️🗝️</div>
+                <button onclick="completeGate('akbari')" class="px-8 py-3 bg-yellow-500 text-white text-2xl rounded font-bold">COLLECT AKBARI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE KASHMIRI ==================== -->
+    <div id="scene-kashmiri" class="hidden relative w-full h-full flex items-center justify-center bg-teal-900">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-teal-700 hover:bg-teal-600 rounded text-white border border-teal-400">
+            ← LEAVE THE LOOM
+        </button>
+        <div id="kashmiri-container" class="relative w-[800px] h-[800px] bg-stone-100 border-8 border-teal-800 shadow-2xl rounded-lg overflow-hidden flex flex-col items-center overflow-y-auto game-scroll">
+            <div class="mt-4 text-center">
+                <h2 class="font-royal text-2xl text-teal-900">Kashmiri Shawl Pattern</h2>
+                <div id="referenceGrid" class="grid grid-cols-5 gap-1 mt-2 p-2 bg-stone-200 rounded border-2 border-dashed border-teal-400 mx-auto w-fit">
+                </div>
+                <p class="text-xs text-teal-700 mt-1 uppercase tracking-widest">Recreate this design below</p>
+            </div>
+            <div id="playerGrid" class="grid grid-cols-5 gap-2 mt-6 mb-6 p-4 bg-white shadow-inner rounded-lg border-4 border-teal-600">
+            </div>
+            <div id="palette" class="flex gap-4 mb-6 p-3 bg-stone-200 rounded-full shadow-md">
+            </div>
+            <div id="startScreenKashmiri" class="absolute inset-0 bg-teal-950/90 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-teal-300 mb-4 font-bold">The Weaver's Art</h1>
+                <p class="text-xl text-teal-100 max-w-md mb-8">
+                    The ancient patterns of the Kashmiri shawls are fading. <br><br>
+                    Select a thread color and click the grid to match the Master's design.
+                </p>
+                <button onclick="startKashmiriGame()" class="px-8 py-3 bg-teal-500 hover:bg-teal-400 text-white text-2xl font-bold rounded shadow-lg transition-all">
+                    START WEAVING
+                </button>
+            </div>
+            <div id="winScreenKashmiri" class="hidden absolute inset-0 bg-teal-900/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">MASTER WEAVER!</h1>
+                <p class="text-2xl text-white mb-6">The threads of history are bound once more.</p>
+                <div class="text-6xl mb-6 animate-pulse">🧶🗝️</div>
+                <button onclick="completeGate('kashmiri')" class="px-8 py-3 bg-teal-500 text-white text-2xl rounded font-bold">COLLECT KASHMIRI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE MASTI (UPDATED) ==================== -->
+    <div id="scene-masjidi" class="hidden relative w-full h-full flex items-center justify-center bg-indigo-950">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-indigo-800 hover:bg-indigo-700 rounded text-white border border-indigo-400">
+            ← EXIT MOSQUE COURTYARD
+        </button>
+        <div id="masjidi-container" class="relative w-[800px] h-[600px] bg-stone-900 border-8 border-indigo-500 shadow-2xl rounded-lg overflow-hidden flex flex-row items-center justify-center gap-8 p-8">
+            
+            <!-- Left: The Puzzle -->
+            <div class="flex flex-col items-center">
+                <div class="mb-4 text-center">
+                    <h2 class="font-royal text-2xl text-indigo-300">The Mariyam Zamani Mosaic</h2>
+                    <p class="text-indigo-200/60 text-sm">Click tiles to rotate. Match the design on the right.</p>
+                </div>
+                <div id="mosaicGrid" class="grid grid-cols-3 gap-1 bg-indigo-900 p-2 rounded shadow-inner border border-indigo-700">
+                </div>
+            </div>
+
+            <!-- Right: Target Preview (NEW) -->
+            <div class="flex flex-col items-center justify-center bg-indigo-900/50 p-4 rounded-lg border border-indigo-800 opacity-90">
+                <p class="text-indigo-400 font-royal text-sm mb-2 uppercase tracking-widest text-center">Target Pattern</p>
+                <div id="previewMosaic" class="grid grid-cols-3 gap-1 transform scale-75 origin-top">
+                    <!-- Preview tiles generated by JS -->
+                </div>
+            </div>
+
+            <div id="startScreenMasjidi" class="absolute inset-0 bg-indigo-950/90 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-indigo-300 mb-4 font-bold">The Masjidi Gate</h1>
+                <p class="text-xl text-indigo-100 max-w-md mb-8">
+                    The sacred patterns have been fractured. <br><br>
+                    Rotate the 9 mosaic tiles until the **floral design** flows perfectly.
+                </p>
+                <button onclick="startMasjidiGame()" class="px-8 py-3 bg-indigo-500 hover:bg-indigo-400 text-white text-2xl font-bold rounded shadow-lg transition-all">
+                    RESTORE MOSAIC
+                </button>
+            </div>
+
+            <div id="winScreenMasjidi" class="hidden absolute inset-0 bg-indigo-900/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-300 mb-2">MOSAIC RESTORED!</h1>
+                <p class="text-2xl text-white mb-6 italic">The beauty of Mariyam Zamani shines again.</p>
+                <div class="text-6xl mb-6 animate-spin-slow">💠🗝️</div>
+                <button onclick="completeGate('masjidi')" class="px-8 py-3 bg-indigo-500 text-white text-2xl rounded font-bold">COLLECT MASTI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE MORI ==================== -->
+    <div id="scene-mori" class="hidden relative w-full h-full flex items-center justify-center bg-emerald-900">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-white border border-emerald-400">
+            ← BACK TO STREETS
+        </button>
+        <div id="mori-container" class="relative w-[800px] h-[600px] bg-stone-800 border-8 border-emerald-600 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="moriCanvas" width="800" height="600" class="block"></canvas>
+            <div class="absolute top-5 w-full text-center pointer-events-none">
+                <h2 class="font-royal text-3xl text-emerald-300">Sanitation of Mori Gate</h2>
+                <p class="text-xl text-emerald-100 mt-2">Filter the Corruption: <span id="moriScore">0</span>/10</p>
+            </div>
+            <div id="startScreenMori" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-emerald-400 mb-4">The Smallest Gate</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    The Djinn has clogged the city's outlets with dark energy. <br><br>
+                    Move your **Purification Shield** with the mouse to catch the <span class="text-purple-500 font-bold">Purple Orbs</span>. 
+                    Don't touch the <span class="text-blue-400 font-bold">Clean Water</span>!
+                </p>
+                <button onclick="startMoriGame()" class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-2xl font-bold rounded shadow-lg transition-all">
+                    CLEANSE THE OUTLET
+                </button>
+            </div>
+            <div id="winScreenMori" class="hidden absolute inset-0 bg-emerald-900/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-emerald-300 mb-2">CITY PURIFIED!</h1>
+                <p class="text-2xl text-white mb-6">Mori Gate is clear, and the city breathes again.</p>
+                <div class="text-6xl mb-6 animate-bounce">💧🗝️</div>
+                <button onclick="completeGate('mori')" class="px-8 py-3 bg-white text-emerald-900 text-2xl rounded font-bold">COLLECT MORI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE YAKKI ==================== -->
+    <div id="scene-yakki" class="hidden relative w-full h-full flex items-center justify-center bg-slate-950">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white border border-slate-600">
+            ← LEAVE THE SHRINE
+        </button>
+        <div id="yakki-container" class="relative w-[800px] h-[600px] bg-slate-900 border-8 border-indigo-900 shadow-2xl rounded-lg overflow-hidden">
+            <canvas id="yakkiCanvas" width="800" height="600" class="block"></canvas>
+            <div class="absolute top-5 w-full text-center pointer-events-none">
+                <h2 class="font-royal text-3xl text-indigo-300">The Legend of Pir Zakki</h2>
+                <p class="text-xl text-indigo-100/60 mt-2">Unite the Soul in the Center</p>
+            </div>
+            <div id="startScreenYakki" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center z-20 text-center p-6">
+                <h1 class="font-royal text-5xl text-indigo-400 mb-4">The Divided Saint</h1>
+                <p class="text-xl text-stone-300 max-w-md mb-8">
+                    Use <span class="text-indigo-400 font-bold">[WASD / ARROWS]</span> to move. <br><br>
+                    One orb moves with you, the other moves in **Mirror Reflection**. 
+                    Guide both into the **Golden Portal** at the same time!
+                </p>
+                <button onclick="startYakkiGame()" class="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-2xl font-bold rounded shadow-lg transition-all">
+                    UNITE THE SPIRIT
+                </button>
+            </div>
+            <div id="winScreenYakki" class="hidden absolute inset-0 bg-indigo-950/95 flex flex-col items-center justify-center z-20 text-center">
+                <h1 class="font-royal text-6xl text-amber-400 mb-2">SOUL UNITED</h1>
+                <p class="text-2xl text-white mb-6 italic">The Saint's spirit is finally at peace.</p>
+                <div class="text-6xl mb-6 animate-pulse">✨🗝️</div>
+                <button onclick="completeGate('yakki')" class="px-8 py-3 bg-indigo-500 text-white text-2xl rounded font-bold">COLLECT YAKKI KEY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SCENE SHAHALAM ==================== -->
+    <div id="scene-shahalam" class="hidden relative w-full h-full flex items-center justify-center bg-orange-50">
+        <button onclick="goToMap()" class="absolute top-5 left-5 z-30 px-4 py-2 bg-orange-800 hover:bg-orange-700 rounded text-white border border-orange-600">
+            ← EXIT MARKET
+        </button>
+        <div id="shahalam-container" class="relative w-[800px] h-[600px] bg-stone-300 border-8 border-orange-900 shadow-2xl rounded-lg overflow-hidden cursor-none">
+            <canvas id="shahalamCanvas" width="800" height="600" class="block bg-orange-100 cursor-none"></canvas>
+            <div class="absolute top-5 right-5 text-right pointer-events-none">
+                <h2 class="font-royal text-3xl text-orange-900">DISTANCE</h2>
+                <div class="text-2xl font-bold text-orange-700"><span id="shScore">0</span> / 2000m</div>
+            </div>
+            <div id="startScreenShahalam" class="absolute inset-0 bg-orange-950/90 flex flex-col items-center justify-center z-20 text-center p-6 cursor-default">
+                <h1 class="font-royal text-6xl text-orange-400 mb-4 drop-shadow-lg">Shahalmi Chaos</h1>
+                <p class="text-xl text-orange-100 max-w-md mb-8">
+                    The market is flooded with traffic! <br><br>
+                    **DRAG** your Loader Rickshaw with the mouse to dodge. <br>
+                    Watch out for <span class="text-yellow-400">Drunk Donkey Carts</span> that move up and down!
+                </p>
+                <button onclick="startShahalamGame()" class="px-8 py-4 bg-orange-500 hover:bg-orange-400 text-white text-3xl font-bold rounded-full shadow-xl animate-pulse">
+                    START ENGINE
+                </button>
+            </div>
+            <div id="winScreenShahalam" class="hidden absolute inset-0 bg-emerald-900/95 flex flex-col items-center justify-center z-20 text-center cursor-default">
+                <h1 class="font-royal text-7xl text-white mb-2">DELIVERED!</h1>
+                <p class="text-2xl text-emerald-100 mb-6 font-bold">The goods reached the warehouse safely.</p>
+                <div class="text-7xl mb-6 animate-bounce">📦🗝️</div>
+                <button onclick="completeGate('shahalam')" class="px-10 py-4 bg-white text-emerald-900 text-2xl rounded-full font-bold shadow-2xl hover:bg-emerald-50">
+                    COLLECT FINAL KEY
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scene-boss" class="hidden relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+    
+        <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Lahore_Fort_Diwan-e-Aam.jpg/1200px-Lahore_Fort_Diwan-e-Aam.jpg')] bg-cover bg-center opacity-30"></div>
+        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-purple-950/50"></div>
+
+        <div id="boss-container" class="relative w-[900px] h-[700px] border-4 border-purple-800 shadow-[0_0_50px_rgba(147,51,234,0.5)] overflow-hidden cursor-crosshair">
+            
+            <canvas id="bossCanvas" width="900" height="700" class="block"></canvas>
+
+            <div class="absolute top-4 left-0 w-full px-10 flex justify-between items-end">
+                <div class="w-1/3">
+                    <p class="text-yellow-400 font-bold mb-1">LIGHT OF LAHORE</p>
+                    <div class="w-full h-4 bg-gray-800 rounded border border-yellow-600">
+                        <div id="playerHealthBar" class="h-full bg-yellow-400 w-full transition-all duration-200"></div>
+                    </div>
+                </div>
+                
+                <div class="w-1/3 text-right">
+                    <p class="text-purple-400 font-bold mb-1">DJINN ZAHIL</p>
+                    <div class="w-full h-6 bg-gray-800 rounded border border-purple-600">
+                        <div id="bossHealthBar" class="h-full bg-purple-600 w-full transition-all duration-200"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="startScreenBoss" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-30 text-center p-6">
+                <h1 class="font-royal text-6xl text-purple-500 mb-2">The Diwan-e-Aam</h1>
+                <p class="text-2xl text-stone-300 mb-8 max-w-lg">
+                    The Djinn of Forgetfulness waits in the shadows.<br>
+                    The 12 Keys have formed the **Lamp of Light**.
+                </p>
+                <div class="bg-stone-800 p-6 rounded-lg border border-stone-600 mb-8">
+                    <p class="text-yellow-400 text-lg">🖱️ **MOVE** to dodge Shadows.</p>
+                    <p class="text-yellow-400 text-lg">⚡ **CLICK** to Shoot Light Beams.</p>
+                </div>
+                <button onclick="startBossFight()" class="px-10 py-4 bg-purple-700 hover:bg-purple-600 text-white text-3xl font-bold rounded shadow-[0_0_20px_rgba(168,85,247,0.6)] transition-all">
+                    FACE THE DJINN
+                </button>
+            </div>
+
+            <div id="winScreenBoss" class="hidden absolute inset-0 bg-yellow-50/10 backdrop-blur-md flex flex-col items-center justify-center z-30 text-center animate-fade-in">
+                <h1 class="font-royal text-7xl text-yellow-400 mb-4 drop-shadow-lg">LAHORE IS SAVED!</h1>
+                <p class="text-2xl text-white mb-8 max-w-xl shadow-black drop-shadow-md">
+                    The shadows retreat. The history of the Walled City is safe in your memory.
+                    You are the true Guardian of Androon Lahore.
+                </p>
+                <div class="text-8xl mb-6 animate-pulse">🕌✨</div>
+                <button onclick="resetGame()" class="px-8 py-3 bg-yellow-500 hover:bg-yellow-400 text-black text-xl font-bold rounded shadow-lg">
+                    PLAY AGAIN
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+                /* Fort Animation */
+        .fort-aura-active {
+            animation: pulse-fort 2s infinite;
+        }
+
+        @keyframes pulse-fort {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.5; }
+        }
+
+        /* Fort Button Shake (Optional flair) */
+        .shake-fort {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        .animate-spin-slow { animation: spin 8s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+
+    <script>
+        // ============================
+        // GLOBAL DATA & STATE
+        // ============================
+        const STORAGE_KEY = 'lahoriGatesSave_v1';
+
+        const gatesData = [
+            // North
+            // { id: 'roshnai', name: 'Roshnai Gate', x: 25, y: 15, status: 'locked', type: 'royal' },
+            { id: 'kashmiri', name: 'Kashmiri Gate', x: 55, y: 10, status: 'open', type: 'trade' },
+            { id: 'sheranwala', name: 'Sheranwala Gate', x: 75, y: 15, status: 'open', type: 'royal' },
+            // East
+            { id: 'yakki', name: 'Yakki Gate', x: 90, y: 35, status: 'open', type: 'culture' },
+            { id: 'delhi', name: 'Delhi Gate', x: 85, y: 60, status: 'open', type: 'royal' },
+            // South
+            { id: 'akbari', name: 'Akbari Gate', x: 70, y: 85, status: 'open', type: 'trade' },
+            { id: 'mochi', name: 'Mochi Gate', x: 50, y: 90, status: 'open', type: 'culture' },
+            { id: 'shahalam', name: 'Shah Alam Gate', x: 30, y: 90, status: 'open', type: 'trade' },
+            { id: 'lohari', name: 'Lohari Gate', x: 15, y: 75, status: 'open', type: 'trade' }, 
+            // West
+            { id: 'mori', name: 'Mori Gate', x: 5, y: 60, status: 'open', type: 'culture' },
+            { id: 'bhati', name: 'Bhati Gate', x: 5, y: 40, status: 'open', type: 'culture' },
+            { id: 'taxali', name: 'Taxali Gate', x: 10, y: 20, status: 'open', type: 'culture' },
+            // Extra
+            { id: 'masjidi', name: 'Masjidi Gate', x: 40, y: 10, status: 'open', type: 'royal' }
+        ];
+
+        let playerState = {
+            keys: 0,
+            completedGates: []
+        };
+
+        // ============================
+        // NOTIFICATION & MODAL SYSTEM
+        // ============================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function openResetModal() {
+            document.getElementById('resetModal').classList.add('open');
+        }
+
+        function closeModal() {
+            document.getElementById('resetModal').classList.remove('open');
+        }
+
+        function confirmReset() {
+            localStorage.removeItem(STORAGE_KEY);
+            playerState = { keys: 0, completedGates: [] };
+            closeModal();
+            showToast("Progress reset successfully.", "success");
+            initMap();
+        }
+
+        // ============================
+        // PERSISTENCE LOGIC
+        // ============================
+        function saveProgress() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(playerState));
+                console.log("Game Saved");
+            } catch (e) {
+                console.warn("Save failed (Storage might be disabled):", e);
+            }
+        }
+
+        function loadProgress() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    playerState = JSON.parse(saved);
+                    console.log("Game Loaded", playerState);
+                }
+            } catch (e) {
+                console.warn("Load failed:", e);
+            }
+        }
+
+                // ============================
+        // SCENE 1: MAP LOGIC
+        // ============================
+        function initMap() {
+            loadProgress(); // Ensure we load state before rendering
+            const container = document.getElementById('gate-pins-container');
+            container.innerHTML = ''; 
+
+            // 1. Render Gate Pins
+            gatesData.forEach(gate => {
+                const isCompleted = playerState.completedGates.includes(gate.id);
+                const isOpen = gate.status === 'open' && !isCompleted;
+
+                const btn = document.createElement('button');
+                btn.style.left = gate.x + '%';
+                btn.style.top = gate.y + '%';
+                btn.className = `absolute transform -translate-x-1/2 -translate-y-1/2 group z-10`;
+
+                let iconColor = isCompleted ? 'bg-amber-500' : (isOpen ? 'bg-green-500' : 'bg-stone-600');
+                let ring = isOpen ? '<div class="absolute inset-0 rounded-full border-2 border-green-400 pulse-ring"></div>' : '';
+
+                btn.innerHTML = `
+                    ${ring}
+                    <div class="w-6 h-6 ${iconColor} rounded-full border-2 border-white shadow-lg flex items-center justify-center hover:scale-125 transition-transform duration-200">
+                        ${isCompleted ? '🔑' : ''}
+                    </div>
+                    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <span class="${isOpen ? 'text-green-400' : 'text-stone-400'} font-bold">${gate.name}</span>
+                        <div class="text-[10px] text-stone-500">${isCompleted ? 'RESTORED' : (isOpen ? 'CLICK TO ENTER' : 'LOCKED')}</div>
+                    </div>
+                `;
+
+                btn.onclick = () => {
+                    if (isCompleted) {
+                        showToast(`You have already restored ${gate.name}.`, 'info');
+                        return; 
+                    }
+                    if (gate.status === 'locked') {
+                        showToast("This gate is still lost in the mists of time. (Coming Soon)", 'error');
+                    } else {
+                        enterGate(gate.id);
+                    }
+                };
+
+                container.appendChild(btn);
+            });
+
+            // 2. Update Key Count
+            document.getElementById('totalKeys').innerText = playerState.keys;
+
+            // 3. Check Fort Status (The Boss Button)
+            const fortContainer = document.getElementById('fort-container');
+            const fortAura = document.getElementById('fort-aura');
+            const fortLabel = document.getElementById('fort-label');
+
+            if (playerState.keys === 12) {
+                // UNLOCKED
+                fortContainer.classList.remove('opacity-0', 'pointer-events-none');
+                fortLabel.classList.remove('opacity-0');
+                
+                // Start the intense glow effect
+                fortAura.classList.add('fort-aura-active');
+                
+                // Make sure click handler works
+                document.getElementById('btn-fort').onclick = openFortBattle;
+
+                // Show toast only once per reload if unlocked
+                if(!window.fortToastShown) {
+                    showToast("All Gates Restored! The Shahi Qila awaits.", 'success');
+                    window.fortToastShown = true;
+                }
+
+            } else {
+                // LOCKED
+                fortContainer.classList.add('opacity-0', 'pointer-events-none');
+                fortAura.classList.remove('fort-aura-active');
+                document.getElementById('btn-fort').onclick = null;
+                window.fortToastShown = false; // Reset toast flag if they reset progress
+            }
+        }
+
+        function enterGate(gateId) {
+            document.querySelectorAll('[id^="scene-"]').forEach(s => s.classList.add('hidden'));
+            document.getElementById('scene-map').classList.add('hidden');
+
+            if (gateId === 'lohari') {
+                document.getElementById('scene-game').classList.remove('hidden');
+                resetMinigame();
+            } else if (gateId === 'mochi') {
+                document.getElementById('scene-mochi').classList.remove('hidden');
+                mochiActive = false;
+                drawMochi();
+            } else if (gateId === 'delhi') {
+                document.getElementById('scene-delhi').classList.remove('hidden');
+                delhiActive = false;
+                drawDelhi();
+            } else if (gateId === 'taxali') {
+                document.getElementById('scene-taxali').classList.remove('hidden');
+                document.getElementById('startScreenTaxali').classList.remove('hidden');
+                document.getElementById('winScreenTaxali').classList.add('hidden');
+            } else if (gateId === 'sheranwala') {
+                document.getElementById('scene-sheranwala').classList.remove('hidden');
+                document.getElementById('startScreenSheranwala').classList.remove('hidden');
+                document.getElementById('winScreenSheranwala').classList.add('hidden');
+            } else if (gateId === 'bhati') {
+                document.getElementById('scene-bhati').classList.remove('hidden');
+                document.getElementById('startScreenBhati').classList.remove('hidden');
+                document.getElementById('winScreenBhati').classList.add('hidden');
+            } else if (gateId === 'akbari') {
+                document.getElementById('scene-akbari').classList.remove('hidden');
+                document.getElementById('startScreenAkbari').classList.remove('hidden');
+                document.getElementById('winScreenAkbari').classList.add('hidden');
+            } else if (gateId === 'kashmiri') {
+                document.getElementById('scene-kashmiri').classList.remove('hidden');
+                document.getElementById('startScreenKashmiri').classList.remove('hidden');
+                document.getElementById('winScreenKashmiri').classList.add('hidden');
+            } else if (gateId === 'masjidi') {
+                document.getElementById('scene-masjidi').classList.remove('hidden');
+                document.getElementById('startScreenMasjidi').classList.remove('hidden');
+                document.getElementById('winScreenMasjidi').classList.add('hidden');
+            } else if (gateId === 'mori') {
+                document.getElementById('scene-mori').classList.remove('hidden');
+                document.getElementById('startScreenMori').classList.remove('hidden');
+                document.getElementById('winScreenMori').classList.add('hidden');
+            } else if (gateId === 'yakki') {
+                document.getElementById('scene-yakki').classList.remove('hidden');
+                document.getElementById('startScreenYakki').classList.remove('hidden');
+                document.getElementById('winScreenYakki').classList.add('hidden');
+            } else if (gateId === 'shahalam') {
+                document.getElementById('scene-shahalam').classList.remove('hidden');
+                document.getElementById('startScreenShahalam').classList.remove('hidden');
+                document.getElementById('winScreenShahalam').classList.add('hidden');
+            }
+        }
+
+        function completeGate(gateId) {
+            if (!playerState.completedGates.includes(gateId)) {
+                playerState.completedGates.push(gateId);
+                playerState.keys++;
+                saveProgress(); // Save to localStorage
+                showToast(`${gateId.charAt(0).toUpperCase() + gateId.slice(1)} Key Collected!`, 'success');
+            }
+            goToMap();
+        }
+
+        function goToMap() {
+            document.querySelectorAll('[id^="scene-"]').forEach(s => s.classList.add('hidden'));
+            document.getElementById('scene-map').classList.remove('hidden');
+            stopGameLoop(); 
+            initMap(); 
+        }
+
+        // ============================
+        // GAME LOGIC (Minigames)
+        // ============================
+
+        // Helper for Sparks
+        function spawnSparks(x, y, type) {
+            // Generic placeholder. Specific games might handle their own visuals or we can make a global one.
+            // For now, specific games handle this inside their loops.
+        }
+
+        // --- LOHARI (Smithing) ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-container');
+        let isPlaying = false;
+        let score = 0; let hits = 0; let misses = 0; let swordProgress = 0;
+        let animationFrameId;
+        const bar = { x: 200, y: 500, w: 400, h: 30, cursorX: 0, cursorSpeed: 5, direction: 1, targetX: 0, targetW: 50 };
+        let particles = [];
+
+        function initMinigameLogic() { bar.cursorX = 0; randomizeTarget(); }
+        function randomizeTarget() { bar.targetX = Math.random() * (bar.w - bar.targetW); bar.cursorSpeed = 5 + (hits * 0.5); }
+        function resetMinigame() {
+            score = 0; hits = 0; misses = 0; swordProgress = 0; particles = [];
+            document.getElementById('startScreen').classList.remove('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('winScreen').classList.add('hidden');
+            updateHUD(); draw();
+        }
+        function startMinigame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            initMinigameLogic(); isPlaying = true; gameLoop();
+        }
+        function stopGameLoop() { isPlaying = false; cancelAnimationFrame(animationFrameId); }
+        function handleInput() {
+            if(!isPlaying) return;
+            if (bar.cursorX >= bar.targetX && bar.cursorX <= bar.targetX + bar.targetW) {
+                hits++; score += 100; swordProgress += 10;
+                spawnSparks(bar.x + bar.cursorX, bar.y, 'hit'); randomizeTarget();
+                if(hits >= 10) { isPlaying = false; document.getElementById('winScreen').classList.remove('hidden'); }
+            } else {
+                misses++; container.classList.remove('shake'); void container.offsetWidth; container.classList.add('shake');
+                spawnSparks(bar.x + bar.cursorX, bar.y, 'fail');
+                if(misses >= 3) { isPlaying = false; document.getElementById('gameOverScreen').classList.remove('hidden'); }
+            }
+            updateHUD();
+        }
+        function updateHUD() { document.getElementById('scoreDisplay').innerText = score; document.getElementById('hitsDisplay').innerText = hits; }
+        function spawnSparks(x, y, type) {
+            let color = type === 'hit' ? '#fbbf24' : '#ef4444'; let count = type === 'hit' ? 20 : 5;
+            for(let i=0; i<count; i++) {
+                particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 1) * 10, life: 1.0, color: color });
+            }
+        }
+        function update() {
+            if(!isPlaying) return;
+            bar.cursorX += bar.cursorSpeed * bar.direction;
+            if (bar.cursorX > bar.w || bar.cursorX < 0) bar.direction *= -1;
+            particles.forEach((p, index) => {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life -= 0.05;
+                if(p.life <= 0) particles.splice(index, 1);
+            });
+        }
+        function draw() {
+            ctx.fillStyle = "#1c1917"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Anvil
+            ctx.fillStyle = "#57534e"; ctx.fillRect(300, 300, 200, 100); ctx.fillRect(250, 280, 300, 40);
+            // Sword
+            let r = 100 + (swordProgress * 1.5), g = 100 + (swordProgress * 1.2), b = 100;
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.beginPath(); ctx.moveTo(380, 290); ctx.lineTo(420, 290); ctx.lineTo(420, 150); ctx.lineTo(400, 120); ctx.lineTo(380, 150); ctx.fill();
+            // Bar
+            ctx.fillStyle = "#292524"; ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+            ctx.fillStyle = "#22c55e"; ctx.fillRect(bar.x + bar.targetX, bar.y, bar.targetW, bar.h);
+            ctx.fillStyle = "#ffffff"; ctx.fillRect(bar.x + bar.cursorX - 2, bar.y - 5, 4, bar.h + 10);
+            // Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+            }); ctx.globalAlpha = 1.0;
+        }
+        function gameLoop() { update(); draw(); if(isPlaying) animationFrameId = requestAnimationFrame(gameLoop); }
+        window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !document.getElementById('scene-game').classList.contains('hidden')) handleInput(); });
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); });
+
+
+        // --- MOCHI (Kite) ---
+        const mochiCanvas = document.getElementById('mochiCanvas');
+        const mCtx = mochiCanvas.getContext('2d');
+        let mochiActive = false;
+        let kiteGame = { player: { x: 400, y: 500, targetX: 400, targetY: 500, size: 20 }, enemies: [], spawnTimer: 0, cutsDone: 0, cutsNeeded: 5 };
+        mochiCanvas.addEventListener('mousemove', (e) => {
+            const rect = mochiCanvas.getBoundingClientRect();
+            kiteGame.player.targetX = e.clientX - rect.left; kiteGame.player.targetY = e.clientY - rect.top;
+        });
+        function startMochiGame() {
+            document.getElementById('startScreenMochi').classList.add('hidden'); kiteGame.cutsDone = 0; kiteGame.enemies = []; mochiActive = true; mochiLoop();
+        }
+        function updateMochi() {
+            if (!mochiActive) return;
+            kiteGame.player.x += (kiteGame.player.targetX - kiteGame.player.x) * 0.15;
+            kiteGame.player.y += (kiteGame.player.targetY - kiteGame.player.y) * 0.15;
+            kiteGame.spawnTimer++;
+            if (kiteGame.spawnTimer > 80 && kiteGame.enemies.length < 4) {
+                kiteGame.enemies.push({ x: Math.random() * 700 + 50, y: -100, speed: 1.5 + Math.random() * 2, color: `hsl(${Math.random() * 360}, 80%, 60%)`, phase: Math.random() * Math.PI * 2 });
+                kiteGame.spawnTimer = 0;
+            }
+            kiteGame.enemies.forEach((enemy, index) => {
+                enemy.y += enemy.speed; enemy.x += Math.sin(Date.now() / 600 + enemy.phase) * 2;
+                let dx = kiteGame.player.x - enemy.x; let dy = kiteGame.player.y - enemy.y; let distance = Math.sqrt(dx*dx + dy*dy);
+                if (distance < 40) {
+                    kiteGame.enemies.splice(index, 1); kiteGame.cutsDone++;
+                    if (kiteGame.cutsDone >= kiteGame.cutsNeeded) { mochiActive = false; document.getElementById('winScreenMochi').classList.remove('hidden'); }
+                }
+                if (enemy.y > 700) kiteGame.enemies.splice(index, 1);
+            });
+        }
+        function drawMochi() {
+            mCtx.fillStyle = '#7dd3fc'; mCtx.fillRect(0, 0, 800, 600);
+            mCtx.fillStyle = 'rgba(255,255,255,0.5)'; mCtx.beginPath(); mCtx.arc(100, 100, 40, 0, Math.PI*2); mCtx.arc(140, 110, 50, 0, Math.PI*2); mCtx.fill();
+            mCtx.strokeStyle = "rgba(255,255,255,0.8)"; mCtx.lineWidth = 1.5; mCtx.beginPath(); mCtx.moveTo(400, 650); mCtx.lineTo(kiteGame.player.x, kiteGame.player.y); mCtx.stroke();
+            drawKiteAsset(mCtx, kiteGame.player.x, kiteGame.player.y, '#f43f5e', true);
+            kiteGame.enemies.forEach(enemy => {
+                mCtx.strokeStyle = "rgba(0,0,0,0.2)"; mCtx.beginPath(); mCtx.moveTo(enemy.x, -100); mCtx.lineTo(enemy.x, enemy.y); mCtx.stroke();
+                drawKiteAsset(mCtx, enemy.x, enemy.y, enemy.color, false);
+            });
+            mCtx.fillStyle = "#0369a1"; mCtx.font = "30px VT323"; mCtx.fillText(`KITES CUT: ${kiteGame.cutsDone}/${kiteGame.cutsNeeded}`, 20, 50);
+        }
+        function drawKiteAsset(ctx, x, y, color, isPlayer) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(Date.now() / 200) * 0.1);
+            ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, -25); ctx.lineTo(25, 0); ctx.lineTo(0, 35); ctx.lineTo(-25, 0); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.moveTo(0, -25); ctx.lineTo(0, 35); ctx.moveTo(-25, 0); ctx.quadraticCurveTo(0, -10, 25, 0); ctx.stroke();
+            ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(-5, 35); ctx.lineTo(5, 35); ctx.lineTo(0, 45); ctx.fill();
+            ctx.restore();
+        }
+        function mochiLoop() { updateMochi(); drawMochi(); if (mochiActive) requestAnimationFrame(mochiLoop); }
+
+        // --- DELHI (Lanes) ---
+        const delhiCanvas = document.getElementById('delhiCanvas');
+        const dCtx = delhiCanvas.getContext('2d');
+        let delhiActive = false;
+        let delhiGame = { laneWidth: 200, playerLane: 1, targetX: 400, currentX: 400, obstacles: [], spawnTimer: 0, distance: 0, goalDistance: 2000, speed: 5 };
+        window.addEventListener('keydown', (e) => {
+            if (!delhiActive) return;
+            if (e.key === "ArrowLeft" && delhiGame.playerLane > 0) delhiGame.playerLane--;
+            if (e.key === "ArrowRight" && delhiGame.playerLane < 2) delhiGame.playerLane++;
+        });
+        function startDelhiGame() {
+            document.getElementById('startScreenDelhi').classList.add('hidden'); delhiGame.distance = 0; delhiGame.obstacles = []; delhiActive = true; delhiLoop();
+        }
+        function updateDelhi() {
+            if (!delhiActive) return; delhiGame.distance += delhiGame.speed;
+            delhiGame.targetX = 200 + (delhiGame.playerLane * delhiGame.laneWidth); delhiGame.currentX += (delhiGame.targetX - delhiGame.currentX) * 0.2;
+            delhiGame.spawnTimer++;
+            if (delhiGame.spawnTimer > 40) {
+                delhiGame.obstacles.push({ lane: Math.floor(Math.random() * 3), y: -100, type: Math.random() > 0.5 ? '🛒' : '🛢️' }); delhiGame.spawnTimer = 0;
+            }
+            delhiGame.obstacles.forEach((obs, index) => {
+                obs.y += delhiGame.speed;
+                if (obs.lane === delhiGame.playerLane && obs.y > 450 && obs.y < 520) {
+                    delhiGame.distance -= 100; delhiGame.obstacles.splice(index, 1); spawnSparks(delhiGame.currentX, 500, 'fail');
+                }
+                if (obs.y > 650) delhiGame.obstacles.splice(index, 1);
+            });
+            if (delhiGame.distance >= delhiGame.goalDistance) { delhiActive = false; document.getElementById('winScreenDelhi').classList.remove('hidden'); }
+        }
+        function drawDelhi() {
+            dCtx.fillStyle = "#78716c"; dCtx.fillRect(0, 0, 800, 600);
+            dCtx.strokeStyle = "#a8a29e"; dCtx.setLineDash([20, 20]); dCtx.beginPath(); dCtx.moveTo(266, 0); dCtx.lineTo(266, 600); dCtx.moveTo(533, 0); dCtx.lineTo(533, 600); dCtx.stroke(); dCtx.setLineDash([]);
+            dCtx.font = "80px serif"; dCtx.fillText("🐘", 360, 580);
+            dCtx.font = "50px serif"; delhiGame.obstacles.forEach(obs => { let x = 175 + (obs.lane * delhiGame.laneWidth); dCtx.fillText(obs.type, x, obs.y); });
+            dCtx.fillStyle = "#b91c1c"; dCtx.fillRect(delhiGame.currentX - 20, 480, 40, 60); dCtx.fillStyle = "#fef08a"; dCtx.fillRect(delhiGame.currentX - 10, 470, 20, 20);
+            dCtx.fillStyle = "#444"; dCtx.fillRect(200, 20, 400, 10); dCtx.fillStyle = "#f59e0b"; let progW = (delhiGame.distance / delhiGame.goalDistance) * 400; dCtx.fillRect(200, 20, progW, 10);
+        }
+        function delhiLoop() { updateDelhi(); drawDelhi(); if (delhiActive) requestAnimationFrame(delhiLoop); }
+
+        // --- TAXALI (Simon Says) ---
+        let taxaliGame = { sequence: [], playerSequence: [], isUstadTurn: false, round: 0, maxRounds: 5 };
+        function startTaxaliGame() {
+            document.getElementById('startScreenTaxali').classList.add('hidden'); taxaliGame.sequence = []; taxaliGame.round = 0; nextRound();
+        }
+        function nextRound() {
+            taxaliGame.round++; taxaliGame.playerSequence = []; taxaliGame.sequence.push(Math.floor(Math.random() * 4)); playSequence();
+        }
+        async function playSequence() {
+            taxaliGame.isUstadTurn = true; updateTaxaliStatus("Listen to the Ustad..."); disablePads(true);
+            for (let note of taxaliGame.sequence) { await highlightPad(note); await sleep(400); }
+            taxaliGame.isUstadTurn = false; disablePads(false); updateTaxaliStatus("Your Turn! Repeat the melody.");
+        }
+        async function highlightPad(id) {
+            const pad = document.getElementById(`pad-${id}`);
+            pad.classList.remove('grayscale'); pad.classList.add('scale-105', 'brightness-150', 'border-white'); await sleep(600);
+            pad.classList.add('grayscale'); pad.classList.remove('scale-105', 'brightness-150', 'border-white');
+        }
+        function handlePadClick(id) {
+            if (taxaliGame.isUstadTurn) return; taxaliGame.playerSequence.push(id);
+            const expected = taxaliGame.sequence[taxaliGame.playerSequence.length - 1];
+            if (id !== expected) {
+                updateTaxaliStatus("Wrong rhythm! The Ustad frowns..."); spawnSparks(400, 300, 'fail');
+                setTimeout(() => { taxaliGame.sequence = []; taxaliGame.round = 0; nextRound(); }, 1000); return;
+            }
+            highlightPad(id);
+            if (taxaliGame.playerSequence.length === taxaliGame.sequence.length) {
+                if (taxaliGame.round === taxaliGame.maxRounds) document.getElementById('winScreenTaxali').classList.remove('hidden');
+                else setTimeout(nextRound, 1000);
+            }
+        }
+        function updateTaxaliStatus(msg) { document.getElementById('taxaliStatus').innerText = msg; }
+        function disablePads(disable) { for (let i = 0; i < 4; i++) document.getElementById(`pad-${i}`).disabled = disable; }
+        function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+        // --- SHERANWALA (Stealth) ---
+        const sherCanvas = document.getElementById('sheranwalaCanvas');
+        const sCtx = sherCanvas.getContext('2d');
+        let sherActive = false;
+        let sherGame = { player: { x: 400, y: 550, size: 15, speed: 4 }, lions: [{ x: 200, y: 300, angle: 0, rotSpeed: 0.02, range: 150, fov: Math.PI / 3 }, { x: 600, y: 150, angle: Math.PI, rotSpeed: -0.015, range: 200, fov: Math.PI / 4 }], goal: { x: 400, y: 50, size: 40 }, keys: {} };
+        window.addEventListener('keydown', e => sherGame.keys[e.code] = true); window.addEventListener('keyup', e => sherGame.keys[e.code] = false);
+        function startSheranwalaGame() {
+            document.getElementById('startScreenSheranwala').classList.add('hidden'); sherGame.player = { x: 400, y: 550, size: 15, speed: 4 }; sherActive = true; sherLoop();
+        }
+        function updateSheranwala() {
+            if (!sherActive) return;
+            if (sherGame.keys['ArrowUp'] || sherGame.keys['KeyW']) sherGame.player.y -= sherGame.player.speed;
+            if (sherGame.keys['ArrowDown'] || sherGame.keys['KeyS']) sherGame.player.y += sherGame.player.speed;
+            if (sherGame.keys['ArrowLeft'] || sherGame.keys['KeyA']) sherGame.player.x -= sherGame.player.speed;
+            if (sherGame.keys['ArrowRight'] || sherGame.keys['KeyD']) sherGame.player.x += sherGame.player.speed;
+            sherGame.player.x = Math.max(20, Math.min(780, sherGame.player.x)); sherGame.player.y = Math.max(20, Math.min(580, sherGame.player.y));
+            for (let lion of sherGame.lions) {
+                lion.angle += lion.rotSpeed;
+                let dx = sherGame.player.x - lion.x; let dy = sherGame.player.y - lion.y; let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < lion.range) {
+                    let angleToPlayer = Math.atan2(dy, dx); let diff = angleToPlayer - lion.angle;
+                    while (diff < -Math.PI) diff += Math.PI * 2; while (diff > Math.PI) diff -= Math.PI * 2;
+                    if (Math.abs(diff) < lion.fov / 2) {
+                        spawnSparks(sherGame.player.x, sherGame.player.y, 'fail'); sherGame.player = { x: 400, y: 550, size: 15, speed: 4 };
+                    }
+                }
+            }
+            let distToGoal = Math.hypot(sherGame.player.x - sherGame.goal.x, sherGame.player.y - sherGame.goal.y);
+            if (distToGoal < 30) { sherActive = false; document.getElementById('winScreenSheranwala').classList.remove('hidden'); }
+        }
+        function drawSheranwala() {
+            sCtx.fillStyle = "#292524"; sCtx.fillRect(0, 0, 800, 600);
+            sCtx.strokeStyle = "#fbbf24"; sCtx.lineWidth = 5; sCtx.strokeRect(sherGame.goal.x - 25, sherGame.goal.y - 25, 50, 50); sCtx.fillStyle = "#451a03"; sCtx.fillRect(sherGame.goal.x - 20, sherGame.goal.y - 20, 40, 40);
+            for (let lion of sherGame.lions) {
+                sCtx.fillStyle = "rgba(250, 204, 21, 0.2)"; sCtx.beginPath(); sCtx.moveTo(lion.x, lion.y); sCtx.arc(lion.x, lion.y, lion.range, lion.angle - lion.fov/2, lion.angle + lion.fov/2); sCtx.closePath(); sCtx.fill();
+                sCtx.fillStyle = "#b45309"; sCtx.beginPath(); sCtx.arc(lion.x, lion.y, 20, 0, Math.PI*2); sCtx.fill();
+                sCtx.fillStyle = "black"; sCtx.beginPath(); sCtx.arc(lion.x + Math.cos(lion.angle)*15, lion.y + Math.sin(lion.angle)*15, 5, 0, Math.PI*2); sCtx.fill();
+            }
+            sCtx.fillStyle = "#3b82f6"; sCtx.beginPath(); sCtx.arc(sherGame.player.x, sherGame.player.y, sherGame.player.size, 0, Math.PI*2); sCtx.fill();
+        }
+        function sherLoop() { updateSheranwala(); drawSheranwala(); if (sherActive) requestAnimationFrame(sherLoop); }
+
+        // --- BHATI (Poetry) ---
+        const bhatiCanvas = document.getElementById('bhatiCanvas');
+        const bCtx = bhatiCanvas.getContext('2d');
+        let bhatiActive = false;
+        const poemVerses = [
+            { text: "Khudi ko kar buland itna", words: ["Khudi", "ko", "kar", "buland", "itna"] }, 
+            { text: "Sitaron se aage jahan aur bhi hain", words: ["Sitaron", "se", "aage", "jahan", "aur"] },
+            { text: "Na tha kuch to khuda tha", words: ["Na", "tha", "kuch", "to", "khuda", "tha"] },
+            { text: "Har cheez mein hai barkat", words: ["Har", "cheez", "mein", "hai", "barkat"] },
+            { text: "Dil se jo baat nikalti hai", words: ["Dil", "se", "jo", "baat", "nikalti", "hai"] },
+            { text: "Agar Maqsood-E-Kul Main Hun To Mujh Se Mawara Kya Hai", words: ["Agar", "Maqsood-E-Kul", "Main", "Hun", "To", "Mujh", "Se", "Mawara", "Kya", "Hai"] }
+
+        ];
+        let bhatiGame = { playerX: 400, fallingWords: [], targetWords: [], collectedIndex: 0, spawnTimer: 0, currentPoem: null };
+        bhatiCanvas.addEventListener('mousemove', (e) => { const rect = bhatiCanvas.getBoundingClientRect(); bhatiGame.playerX = e.clientX - rect.left; });
+        function startBhatiGame() {
+            document.getElementById('startScreenBhati').classList.add('hidden'); bhatiActive = true;
+            bhatiGame.currentPoem = poemVerses[Math.floor(Math.random() * poemVerses.length)];
+            bhatiGame.targetWords = bhatiGame.currentPoem.words; bhatiGame.collectedIndex = 0; bhatiGame.fallingWords = []; updateVerseUI(); bhatiLoop();
+        }
+        function updateVerseUI() {
+            let display = ""; for(let i=0; i < bhatiGame.targetWords.length; i++) { display += (i < bhatiGame.collectedIndex) ? bhatiGame.targetWords[i] + " " : "___ "; }
+            document.getElementById('verseProgress').innerText = `"${display.trim()}"`;
+        }
+        function updateBhati() {
+            if (!bhatiActive) return; bhatiGame.spawnTimer++;
+            if (bhatiGame.spawnTimer > 60) {
+                const randomWord = bhatiGame.targetWords[Math.floor(Math.random() * bhatiGame.targetWords.length)];
+                bhatiGame.fallingWords.push({ text: randomWord, x: Math.random() * 700 + 50, y: -50, speed: 2 + Math.random() * 2 }); bhatiGame.spawnTimer = 0;
+            }
+            bhatiGame.fallingWords.forEach((word, index) => {
+                word.y += word.speed;
+                if (word.y > 520 && word.y < 570 && Math.abs(word.x - bhatiGame.playerX) < 50) {
+                    if (word.text === bhatiGame.targetWords[bhatiGame.collectedIndex]) {
+                        bhatiGame.collectedIndex++; spawnSparks(word.x, word.y, 'hit'); updateVerseUI();
+                        if (bhatiGame.collectedIndex >= bhatiGame.targetWords.length) {
+                            bhatiActive = false; document.getElementById('finalVerseDisplay').innerText = bhatiGame.currentPoem.text; document.getElementById('winScreenBhati').classList.remove('hidden');
+                        }
+                    } else { spawnSparks(word.x, word.y, 'fail'); }
+                    bhatiGame.fallingWords.splice(index, 1);
+                }
+                if (word.y > 650) bhatiGame.fallingWords.splice(index, 1);
+            });
+        }
+        function drawBhati() {
+            bCtx.clearRect(0, 0, 800, 600); bCtx.font = "bold 24px 'Cinzel', serif"; bCtx.textAlign = "center";
+            bhatiGame.fallingWords.forEach(word => {
+                bCtx.fillStyle = "#fff"; bCtx.shadowBlur = 5; bCtx.shadowColor = "rgba(0,0,0,0.2)"; bCtx.fillRect(word.x - 50, word.y - 20, 100, 40);
+                bCtx.fillStyle = "#1c1917"; bCtx.shadowBlur = 0; bCtx.fillText(word.text, word.x, word.y + 8);
+            });
+            bCtx.fillStyle = "#78350f"; bCtx.fillRect(bhatiGame.playerX - 60, 550, 120, 20); bCtx.fillStyle = "#fef3c7"; bCtx.fillRect(bhatiGame.playerX - 55, 545, 110, 10);
+        }
+        function bhatiLoop() { updateBhati(); drawBhati(); if (bhatiActive) requestAnimationFrame(bhatiLoop); }
+
+        // --- AKBARI (Balance) ---
+        const akbariCanvas = document.getElementById('akbariCanvas');
+        const aCtx = akbariCanvas.getContext('2d');
+        let akbariActive = false;
+        let akbariGame = {
+            targetWeight: 500, leftPanWeight: 0, rightPanWeight: 0, tiltAngle: 0,
+            weights: [{ id: 1, val: 250, x: 100, y: 500, color: '#57534e', grabbed: false }, { id: 2, val: 100, x: 180, y: 500, color: '#57534e', grabbed: false }, { id: 3, val: 100, x: 250, y: 500, color: '#57534e', grabbed: false }, { id: 4, val: 50, x: 310, y: 500, color: '#57534e', grabbed: false }],
+            spices: [{ id: 5, val: 300, x: 500, y: 500, color: '#f59e0b', grabbed: false }, { id: 6, val: 200, x: 600, y: 500, color: '#f59e0b', grabbed: false }], grabbedObj: null
+        };
+        akbariCanvas.addEventListener('mousedown', (e) => {
+            const rect = akbariCanvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+            const allObjs = [...akbariGame.weights, ...akbariGame.spices]; akbariGame.grabbedObj = allObjs.find(o => Math.hypot(o.x - mx, o.y - my) < 30) || null;
+        });
+        akbariCanvas.addEventListener('mousemove', (e) => {
+            if (!akbariGame.grabbedObj) return; const rect = akbariCanvas.getBoundingClientRect(); akbariGame.grabbedObj.x = e.clientX - rect.left; akbariGame.grabbedObj.y = e.clientY - rect.top;
+        });
+        akbariCanvas.addEventListener('mouseup', () => {
+            if (!akbariGame.grabbedObj) return;
+            if (akbariGame.grabbedObj.x > 150 && akbariGame.grabbedObj.x < 350 && akbariGame.grabbedObj.y < 400) akbariGame.grabbedObj.onPan = 'left';
+            else if (akbariGame.grabbedObj.x > 450 && akbariGame.grabbedObj.x < 650 && akbariGame.grabbedObj.y < 400) akbariGame.grabbedObj.onPan = 'right';
+            else akbariGame.grabbedObj.onPan = null;
+            calculateWeights(); akbariGame.grabbedObj = null;
+        });
+        function calculateWeights() {
+            akbariGame.leftPanWeight = akbariGame.weights.filter(w => w.onPan === 'left').reduce((a, b) => a + b.val, 0);
+            akbariGame.rightPanWeight = akbariGame.spices.filter(s => s.onPan === 'right').reduce((a, b) => a + b.val, 0);
+            if (akbariGame.rightPanWeight === akbariGame.targetWeight && akbariGame.leftPanWeight === akbariGame.rightPanWeight) {
+                setTimeout(() => { akbariActive = false; document.getElementById('winScreenAkbari').classList.remove('hidden'); }, 800);
+            }
+        }
+        function startAkbariGame() { document.getElementById('startScreenAkbari').classList.add('hidden'); akbariActive = true; akbariLoop(); }
+        function updateAkbari() { const diff = akbariGame.leftPanWeight - akbariGame.rightPanWeight; const targetTilt = Math.max(-0.4, Math.min(0.4, diff * 0.002)); akbariGame.tiltAngle += (targetTilt - akbariGame.tiltAngle) * 0.1; }
+        function drawAkbari() {
+            aCtx.fillStyle = "#f5f5f4"; aCtx.fillRect(0, 0, 800, 600);
+            aCtx.fillStyle = "#444"; aCtx.fillRect(395, 100, 10, 300); aCtx.fillRect(350, 400, 100, 20);
+            aCtx.save(); aCtx.translate(400, 150); aCtx.rotate(akbariGame.tiltAngle);
+            aCtx.strokeStyle = "#92400e"; aCtx.lineWidth = 8; aCtx.beginPath(); aCtx.moveTo(-200, 0); aCtx.lineTo(200, 0); aCtx.stroke(); drawPan(-200, 150); drawPan(200, 150); aCtx.restore();
+            [...akbariGame.weights, ...akbariGame.spices].forEach(obj => {
+                aCtx.fillStyle = obj.color; aCtx.beginPath(); aCtx.arc(obj.x, obj.y, 25, 0, Math.PI*2); aCtx.fill();
+                aCtx.fillStyle = "white"; aCtx.font = "14px Arial"; aCtx.textAlign = "center"; aCtx.fillText(obj.val + "g", obj.x, obj.y + 5);
+            });
+        }
+        function drawPan(x, y) {
+            aCtx.strokeStyle = "#57534e"; aCtx.lineWidth = 2; aCtx.beginPath(); aCtx.moveTo(x, 0); aCtx.lineTo(x - 50, y); aCtx.lineTo(x + 50, y); aCtx.closePath(); aCtx.stroke();
+            aCtx.fillStyle = "#d6d3d1"; aCtx.beginPath(); aCtx.ellipse(x, y, 60, 15, 0, 0, Math.PI * 2); aCtx.fill();
+        }
+        function akbariLoop() { updateAkbari(); drawAkbari(); if (akbariActive) requestAnimationFrame(akbariLoop); }
+
+        // --- KASHMIRI (Grid Coloring) ---
+        let kashmiriGame = { colors: ['#ef4444', '#3b82f6', '#eab308', '#22c55e', '#ffffff'], selectedColor: '#ef4444', targetPattern: [], playerPattern: [], gridSize: 25 };
+        function generatePattern() {
+            kashmiriGame.targetPattern = []; kashmiriGame.playerPattern = [];
+            for (let i = 0; i < kashmiriGame.gridSize; i++) {
+                kashmiriGame.targetPattern.push(kashmiriGame.colors[Math.floor(Math.random() * kashmiriGame.colors.length)]);
+                kashmiriGame.playerPattern.push('#d1d5db');
+            }
+        }
+        function renderPalette() {
+            const palette = document.getElementById('palette'); palette.innerHTML = '';
+            kashmiriGame.colors.forEach(color => {
+                const btn = document.createElement('button');
+                const isSelected = kashmiriGame.selectedColor === color;
+                btn.className = `w-12 h-12 rounded-full border-4 transition-all duration-200 ${isSelected ? 'border-stone-800 scale-125 z-10' : 'border-white hover:scale-110'}`;
+                btn.style.backgroundColor = color;
+                btn.onclick = () => { kashmiriGame.selectedColor = color; renderPalette(); }; palette.appendChild(btn);
+            });
+        }
+        function renderGrids() {
+            const ref = document.getElementById('referenceGrid'); const play = document.getElementById('playerGrid'); ref.innerHTML = ''; play.innerHTML = '';
+            for (let i = 0; i < kashmiriGame.gridSize; i++) {
+                const refCell = document.createElement('div'); refCell.className = "w-8 h-8 rounded-sm shadow-sm"; refCell.style.backgroundColor = kashmiriGame.targetPattern[i]; ref.appendChild(refCell);
+                const playCell = document.createElement('div'); playCell.className = "w-14 h-14 rounded border border-stone-300 cursor-pointer hover:opacity-80 transition-all"; playCell.style.backgroundColor = kashmiriGame.playerPattern[i];
+                playCell.onclick = () => { kashmiriGame.playerPattern[i] = kashmiriGame.selectedColor; renderGrids(); checkWin(); }; play.appendChild(playCell);
+            }
+        }
+        function checkWin() {
+            const isMatch = kashmiriGame.playerPattern.every((color, i) => color === kashmiriGame.targetPattern[i]);
+            if (isMatch) document.getElementById('winScreenKashmiri').classList.remove('hidden');
+        }
+        function startKashmiriGame() { document.getElementById('startScreenKashmiri').classList.add('hidden'); generatePattern(); renderPalette(); renderGrids(); }
+
+        // --- MASTI GAME STATE (UPDATED) ---
+        let masjidiGame = { tiles: [], gridSize: 9 };
+
+        // Helper to create the consistent SVG pattern
+        function getMosaicSVG() {
+            return `
+                <svg width="128" height="128" viewBox="0 0 100 100" class="w-full h-full block pointer-events-none">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#818cf8" stroke-width="2" opacity="0.3"/>
+                    <path d="M50 0 L50 100 M0 50 L100 50" stroke="#fcd34d" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="50" cy="50" r="15" fill="#4f46e5" stroke="#fcd34d" stroke-width="2"/>
+                    <circle cx="0" cy="0" r="10" fill="#fcd34d"/>
+                    <circle cx="100" cy="100" r="10" fill="#fcd34d"/>
+                </svg>
+            `;
+        }
+
+        function startMasjidiGame() {
+            document.getElementById('startScreenMasjidi').classList.add('hidden');
+            masjidiGame.tiles = [];
+            // Initialize with random rotation (90, 180, or 270)
+            for (let i = 0; i < masjidiGame.gridSize; i++) {
+                const randomRot = (Math.floor(Math.random() * 3) + 1) * 90;
+                masjidiGame.tiles.push(randomRot);
+            }
+            renderMosaic();
+            renderPreviewMosaic();
+        }
+
+        // Renders the target preview (Static)
+        function renderPreviewMosaic() {
+            const previewContainer = document.getElementById('previewMosaic');
+            if (!previewContainer) return; // Safety check
+            previewContainer.innerHTML = '';
+            for(let i=0; i<masjidiGame.gridSize; i++) {
+                const cell = document.createElement('div');
+                cell.className = "w-20 h-20 bg-indigo-800 border border-indigo-600 overflow-hidden";
+                cell.innerHTML = getMosaicSVG();
+                previewContainer.appendChild(cell);
+            }
+        }
+
+        // Renders the playable grid with Visual Feedback
+        function renderMosaic() {
+            const grid = document.getElementById('mosaicGrid');
+            if (!grid) return; // Safety check
+            grid.innerHTML = '';
+            
+            masjidiGame.tiles.forEach((rotation, index) => {
+                const tile = document.createElement('div');
+                
+                // Check if this specific tile is in the correct position (0 degrees)
+                const isCorrect = rotation === 0;
+
+                // Base Classes + Dynamic Correctness Class
+                tile.className = `w-32 h-32 bg-indigo-800 border border-indigo-600 cursor-pointer overflow-hidden transition-all duration-300 flex items-center justify-center relative shadow-lg
+                    ${isCorrect ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.6)]' : ''}`;
+                
+                // Apply Rotation
+                tile.style.transform = `rotate(${rotation}deg)`;
+                tile.innerHTML = getMosaicSVG();
+                
+                tile.onclick = () => rotateTile(index);
+                grid.appendChild(tile);
+            });
+        }
+
+        function rotateTile(index) {
+            // Update rotation state
+            masjidiGame.tiles[index] = (masjidiGame.tiles[index] + 90) % 360;
+            renderMosaic(); // Re-render to update visual glow and rotation
+            checkMasjidiWin();
+        }
+
+        function checkMasjidiWin() {
+            // Check if ALL tiles are at 0 rotation
+            const isSolved = masjidiGame.tiles.every(rot => rot === 0);
+            
+            if (isSolved) {
+                // Small delay for the last spin animation to finish
+                setTimeout(() => { 
+                    const winScreen = document.getElementById('winScreenMasjidi');
+                    if(winScreen) winScreen.classList.remove('hidden'); 
+                }, 300);
+            }
+        }
+        // --- MORI (Falling Orbs) ---
+        const moriCanvas = document.getElementById('moriCanvas');
+        const moCtx = moriCanvas.getContext('2d');
+        let moriActive = false;
+        let moriGame = { shieldX: 400, items: [], score: 0, targetScore: 10, spawnTimer: 0 };
+        moriCanvas.addEventListener('mousemove', (e) => { const rect = moriCanvas.getBoundingClientRect(); moriGame.shieldX = e.clientX - rect.left; });
+        function startMoriGame() {
+            document.getElementById('startScreenMori').classList.add('hidden'); moriGame.score = 0; moriGame.items = []; moriActive = true; updateMoriUI(); moriLoop();
+        }
+        function updateMoriUI() { document.getElementById('moriScore').innerText = moriGame.score; }
+        function updateMori() {
+            if (!moriActive) return; moriGame.spawnTimer++;
+            if (moriGame.spawnTimer > 40) {
+                const isCorruption = Math.random() > 0.4; moriGame.items.push({ x: Math.random() * 700 + 50, y: -50, type: isCorruption ? 'corruption' : 'water', speed: 3 + Math.random() * 3 }); moriGame.spawnTimer = 0;
+            }
+            moriGame.items.forEach((item, index) => {
+                item.y += item.speed;
+                if (item.y > 500 && item.y < 540 && Math.abs(item.x - moriGame.shieldX) < 60) {
+                    if (item.type === 'corruption') { moriGame.score++; spawnSparks(item.x, item.y, 'hit'); updateMoriUI(); if (moriGame.score >= moriGame.targetScore) { moriActive = false; document.getElementById('winScreenMori').classList.remove('hidden'); } }
+                    else { moriGame.score = Math.max(0, moriGame.score - 1); updateMoriUI(); spawnSparks(item.x, item.y, 'fail'); }
+                    moriGame.items.splice(index, 1);
+                }
+                if (item.y > 650) moriGame.items.splice(index, 1);
+            });
+        }
+        function drawMori() {
+            moCtx.fillStyle = "#1c1917"; moCtx.fillRect(0, 0, 800, 600);
+            moriGame.items.forEach(item => {
+                moCtx.fillStyle = item.type === 'corruption' ? '#a855f7' : '#38bdf8'; moCtx.beginPath(); moCtx.arc(item.x, item.y, item.type === 'corruption' ? 15 : 10, 0, Math.PI*2); moCtx.fill();
+                if (item.type === 'corruption') { moCtx.shadowBlur = 15; moCtx.shadowColor = "#a855f7"; }
+            }); moCtx.shadowBlur = 0;
+            moCtx.strokeStyle = "#10b981"; moCtx.lineWidth = 5; moCtx.beginPath(); moCtx.arc(moriGame.shieldX, 520, 60, Math.PI, 0); moCtx.stroke();
+        }
+        function moriLoop() { updateMori(); drawMori(); if (moriActive) requestAnimationFrame(moriLoop); }
+
+        // --- YAKKI (Mirror) ---
+        const yakkiCanvas = document.getElementById('yakkiCanvas');
+        const yCtx = yakkiCanvas.getContext('2d');
+        let yakkiActive = false;
+        let yakkiGame = { orbA: { x: 200, y: 300, color: '#6366f1' }, orbB: { x: 600, y: 300, color: '#f43f5e' }, portal: { x: 400, y: 300, r: 40 }, keys: {} };
+        window.addEventListener('keydown', e => yakkiGame.keys[e.code] = true); window.addEventListener('keyup', e => yakkiGame.keys[e.code] = false);
+        function startYakkiGame() {
+            document.getElementById('startScreenYakki').classList.add('hidden'); yakkiGame.orbA = { x: 150, y: 300, color: '#6366f1' }; yakkiGame.orbB = { x: 650, y: 300, color: '#f43f5e' }; yakkiActive = true; yakkiLoop();
+        }
+        function updateYakki() {
+            if (!yakkiActive) return; const speed = 4; let dx = 0, dy = 0;
+            if (yakkiGame.keys['ArrowUp'] || yakkiGame.keys['KeyW']) dy = -speed; if (yakkiGame.keys['ArrowDown'] || yakkiGame.keys['KeyS']) dy = speed; if (yakkiGame.keys['ArrowLeft'] || yakkiGame.keys['KeyA']) dx = -speed; if (yakkiGame.keys['ArrowRight'] || yakkiGame.keys['KeyD']) dx = speed;
+            yakkiGame.orbA.x += dx; yakkiGame.orbA.y += dy; yakkiGame.orbB.x -= dx; yakkiGame.orbB.y += dy;
+            [yakkiGame.orbA, yakkiGame.orbB].forEach(orb => { orb.x = Math.max(20, Math.min(780, orb.x)); orb.y = Math.max(20, Math.min(580, orb.y)); });
+            const distA = Math.hypot(yakkiGame.orbA.x - yakkiGame.portal.x, yakkiGame.orbA.y - yakkiGame.portal.y); const distB = Math.hypot(yakkiGame.orbB.x - yakkiGame.portal.x, yakkiGame.orbB.y - yakkiGame.portal.y);
+            if (distA < 30 && distB < 30) { yakkiActive = false; document.getElementById('winScreenYakki').classList.remove('hidden'); }
+        }
+        function drawYakki() {
+            yCtx.fillStyle = '#0f172a'; yCtx.fillRect(0, 0, 800, 600);
+            yCtx.shadowBlur = 20; yCtx.shadowColor = "#fbbf24"; yCtx.fillStyle = "rgba(251, 191, 36, 0.2)"; yCtx.beginPath(); yCtx.arc(yakkiGame.portal.x, yakkiGame.portal.y, yakkiGame.portal.r, 0, Math.PI*2); yCtx.fill(); yCtx.strokeStyle = "#fbbf24"; yCtx.lineWidth = 3; yCtx.stroke();
+            [yakkiGame.orbA, yakkiGame.orbB].forEach(orb => { yCtx.shadowColor = orb.color; yCtx.fillStyle = orb.color; yCtx.beginPath(); yCtx.arc(orb.x, orb.y, 15, 0, Math.PI*2); yCtx.fill(); }); yCtx.shadowBlur = 0;
+        }
+        function yakkiLoop() { updateYakki(); drawYakki(); if (yakkiActive) requestAnimationFrame(yakkiLoop); }
+
+        // --- SHAHALAM (Runner) ---
+        const shCanvas = document.getElementById('shahalamCanvas');
+        const sctx = shCanvas.getContext('2d');
+        let shActive = false;
+        let hustle = { player: { x: 100, y: 300, w: 90, h: 50 }, mouseY: 300, obstacles: [], timer: 0, distance: 0, targetDistance: 2000, bgOffset: 0 };
+        document.getElementById('shahalam-container').addEventListener('mousemove', (e) => {
+            if (!shActive) return; const rect = shCanvas.getBoundingClientRect(); let y = e.clientY - rect.top; hustle.mouseY = Math.max(40, Math.min(560, y));
+        });
+        function startShahalamGame() {
+            document.getElementById('startScreenShahalam').classList.add('hidden'); hustle.distance = 0; hustle.obstacles = []; hustle.player.y = 300; shActive = true; shLoop();
+        }
+        function updateHustle() {
+            if (!shActive) return;
+            hustle.player.y += (hustle.mouseY - hustle.player.y) * 0.2; hustle.distance += 4; document.getElementById('shScore').innerText = Math.floor(hustle.distance); hustle.bgOffset += 5; hustle.timer++;
+            if (hustle.timer > 35) { spawnObstacle(); hustle.timer = 0; }
+            hustle.obstacles.forEach((obs, index) => {
+                obs.x -= obs.speed; if (obs.type === 'drunk_cart') { obs.y += Math.sin(obs.oscillateTimer) * 3; obs.oscillateTimer += 0.1; }
+                let p = hustle.player; let padding = 10;
+                if (p.x < obs.x + obs.w - padding && p.x + p.w > obs.x + padding && p.y - (p.h/2) < obs.y + obs.h - padding && p.y + (p.h/2) > obs.y + padding) { gameOverShahalmi(); }
+                if (obs.x < -100) hustle.obstacles.splice(index, 1);
+            });
+            if (hustle.distance >= hustle.targetDistance) { shActive = false; document.getElementById('winScreenShahalam').classList.remove('hidden'); }
+        }
+        function spawnObstacle() {
+            const types = ['rickshaw', 'person', 'drunk_cart', 'truck']; const type = types[Math.floor(Math.random() * types.length)];
+            let obs = { x: 850, y: Math.random() * 500 + 50, w: 60, h: 40, speed: 5 + Math.random() * 3, type: type, oscillateTimer: 0 };
+            if (type === 'truck') { obs.w = 120; obs.h = 60; obs.speed = 4; } else if (type === 'person') { obs.w = 30; obs.h = 60; obs.speed = 2; } else if (type === 'rickshaw') { obs.speed = 9; }
+            hustle.obstacles.push(obs);
+        }
+        function drawHustle() {
+            sctx.fillStyle = '#78716c'; sctx.fillRect(0, 0, 800, 600); sctx.strokeStyle = 'white'; sctx.setLineDash([40, 40]); sctx.lineDashOffset = -hustle.bgOffset; sctx.beginPath(); sctx.moveTo(0, 200); sctx.lineTo(800, 200); sctx.moveTo(0, 400); sctx.lineTo(800, 400); sctx.stroke(); sctx.setLineDash([]);
+            hustle.obstacles.forEach(obs => {
+                sctx.font = "40px Arial"; sctx.textAlign = "center"; sctx.textBaseline = "middle"; let sprite = '📦';
+                if (obs.type === 'truck') sprite = '🚚'; if (obs.type === 'rickshaw') sprite = '🛺'; if (obs.type === 'drunk_cart') sprite = '🐎'; if (obs.type === 'person') sprite = '🚶';
+                sctx.fillText(sprite, obs.x + (obs.w/2), obs.y + (obs.h/2));
+            });
+            let px = hustle.player.x; let py = hustle.player.y;
+            sctx.fillStyle = "rgba(0,0,0,0.3)"; sctx.beginPath(); sctx.ellipse(px + 40, py + 30, 40, 10, 0, 0, Math.PI*2); sctx.fill();
+            sctx.fillStyle = "#ea580c"; sctx.fillRect(px, py - 20, 60, 40); sCtx.fillStyle = "#1e3a8a"; sCtx.fillRect(px + 60, py - 25, 40, 50); sCtx.strokeStyle = "#60a5fa"; sCtx.strokeRect(px + 60, py - 25, 40, 50);
+            sCtx.fillStyle = "#111"; sCtx.beginPath(); sCtx.arc(px + 10, py + 20, 10, 0, Math.PI*2); sCtx.fill(); sCtx.beginPath(); sCtx.arc(px + 50, py + 20, 10, 0, Math.PI*2); sCtx.fill();
+        }
+        function gameOverShahalmi() { shActive = false; spawnSparks(hustle.player.x + 45, hustle.player.y, 'fail'); setTimeout(() => { document.getElementById('startScreenShahalam').classList.remove('hidden'); }, 1000); }
+        function shLoop() { updateHustle(); drawHustle(); if (shActive) requestAnimationFrame(shLoop); }
+
+        // --- BOSS FIGHT STATE ---
+        const bossCanvas = document.getElementById('bossCanvas');
+        const bctx = bossCanvas.getContext('2d');
+        let bossActive = false;
+
+        let battle = {
+            player: { x: 450, y: 600, r: 20, hp: 100, maxHp: 100 },
+            boss: { x: 450, y: 150, r: 60, hp: 1000, maxHp: 1000, angle: 0, phase: 1 },
+            projectiles: [], // Player bullets
+            enemyShots: [],  // Boss bullets
+            particles: [],   // Explosions
+            mouse: { x: 450, y: 600 },
+            timer: 0
+        };
+
+        // Controls
+        document.getElementById('boss-container').addEventListener('mousemove', e => {
+            if(!bossActive) return;
+            const rect = bossCanvas.getBoundingClientRect();
+            battle.mouse.x = e.clientX - rect.left;
+            battle.mouse.y = e.clientY - rect.top;
+        });
+
+        document.getElementById('boss-container').addEventListener('mousedown', () => {
+            if(bossActive) shootLight();
+        });
+
+        function startBossFight() {
+            document.getElementById('startScreenBoss').classList.add('hidden');
+            // Reset stats
+            battle.player.hp = 100;
+            battle.boss.hp = 1000;
+            battle.projectiles = [];
+            battle.enemyShots = [];
+            bossActive = true;
+            bossLoop();
+        }
+
+        function shootLight() {
+            battle.projectiles.push({
+                x: battle.player.x,
+                y: battle.player.y - 30,
+                vx: 0,
+                vy: -15, // Fast upward shot
+                color: '#facc15'
+            });
+            // Add recoil or sound here
+        }
+
+        function updateBattle() {
+            if (!bossActive) return;
+
+            // 1. Move Player (Lag Effect for floaty feel)
+            battle.player.x += (battle.mouse.x - battle.player.x) * 0.15;
+            battle.player.y += (battle.mouse.y - battle.player.y) * 0.15;
+
+            // 2. Boss Behavior
+            battle.boss.angle += 0.05;
+            // Hover movement
+            battle.boss.x = 450 + Math.sin(battle.boss.angle) * 300;
+            battle.boss.y = 150 + Math.cos(battle.boss.angle * 2) * 30;
+
+            // Boss Shooting Patterns
+            battle.timer++;
+            if (battle.timer % 40 === 0) {
+                // Pattern A: Aimed Shot
+                let angle = Math.atan2(battle.player.y - battle.boss.y, battle.player.x - battle.boss.x);
+                battle.enemyShots.push({ x: battle.boss.x, y: battle.boss.y, vx: Math.cos(angle)*6, vy: Math.sin(angle)*6, type: 'orb' });
+            }
+            if (battle.timer % 120 === 0) {
+                // Pattern B: Ring Burst
+                for(let i=0; i<8; i++) {
+                    let a = (Math.PI*2 / 8) * i + battle.boss.angle;
+                    battle.enemyShots.push({ x: battle.boss.x, y: battle.boss.y, vx: Math.cos(a)*4, vy: Math.sin(a)*4, type: 'shadow' });
+                }
+            }
+
+            // 3. Update Projectiles
+            // Player Shots
+            battle.projectiles.forEach((p, i) => {
+                p.y += p.vy;
+                // Hit Boss?
+                let dx = p.x - battle.boss.x;
+                let dy = p.y - battle.boss.y;
+                if (Math.hypot(dx, dy) < battle.boss.r) {
+                    battle.boss.hp -= 15; // Damage
+                    createParticles(p.x, p.y, '#a855f7');
+                    battle.projectiles.splice(i, 1);
+                    updateHealthUI();
+                }
+                if (p.y < 0) battle.projectiles.splice(i, 1);
+            });
+
+            // Enemy Shots
+            battle.enemyShots.forEach((p, i) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // Hit Player?
+                let dx = p.x - battle.player.x;
+                let dy = p.y - battle.player.y;
+                if (Math.hypot(dx, dy) < battle.player.r + 10) {
+                    battle.player.hp -= 10;
+                    createParticles(battle.player.x, battle.player.y, '#ef4444');
+                    battle.enemyShots.splice(i, 1);
+                    updateHealthUI();
+                }
+                
+                if (p.x < 0 || p.x > 900 || p.y > 700) battle.enemyShots.splice(i, 1);
+            });
+
+            // 4. Update Particles
+            battle.particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life--;
+                if(p.life <= 0) battle.particles.splice(i, 1);
+            });
+
+            // Win/Loss Checks
+            if (battle.boss.hp <= 0) winGame();
+            if (battle.player.hp <= 0) resetBoss();
+        }
+
+        function createParticles(x, y, color) {
+            for(let i=0; i<8; i++) {
+                battle.particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 20,
+                    color: color
+                });
+            }
+        }
+
+        function updateHealthUI() {
+            let pPct = Math.max(0, (battle.player.hp / battle.player.maxHp) * 100);
+            let bPct = Math.max(0, (battle.boss.hp / battle.boss.maxHp) * 100);
+            document.getElementById('playerHealthBar').style.width = pPct + "%";
+            document.getElementById('bossHealthBar').style.width = bPct + "%";
+        }
+
+        function winGame() {
+            bossActive = false;
+            document.getElementById('winScreenBoss').classList.remove('hidden');
+            createParticles(450, 350, 'gold');
+        }
+
+        function resetBoss() {
+            bossActive = false;
+            // Simple shake effect or alert
+            spawnSparks(battle.player.x, battle.player.y, 'fail');
+            setTimeout(() => {
+                document.getElementById('startScreenBoss').classList.remove('hidden');
+            }, 1000);
+        }
+
+        function drawBoss() {
+            // Clear
+            bctx.clearRect(0, 0, 900, 700);
+
+            // Draw Boss (The Djinn)
+            bctx.save();
+            bctx.translate(battle.boss.x, battle.boss.y);
+            // Aura
+            bctx.shadowBlur = 30; bctx.shadowColor = "#9333ea";
+            // Body
+            bctx.fillStyle = "#581c87";
+            bctx.beginPath(); bctx.arc(0, 0, battle.boss.r, 0, Math.PI*2); bctx.fill();
+            // Eyes
+            bctx.fillStyle = "#fff";
+            bctx.shadowBlur = 10; bctx.shadowColor = "#fff";
+            bctx.beginPath(); bctx.arc(-20, -10, 8, 0, Math.PI*2); bctx.fill();
+            bctx.beginPath(); bctx.arc(20, -10, 8, 0, Math.PI*2); bctx.fill();
+            bctx.restore();
+
+            // Draw Player (The Lamp)
+            bctx.save();
+            bctx.translate(battle.player.x, battle.player.y);
+            bctx.shadowBlur = 20; bctx.shadowColor = "#eab308";
+            bctx.fillStyle = "#facc15"; // Gold
+            // Lamp Shape (simplified)
+            bctx.beginPath();
+            bctx.ellipse(0, 0, 30, 15, 0, 0, Math.PI*2); 
+            bctx.fill();
+            bctx.fillStyle = "#fef08a"; // Flame
+            bctx.beginPath(); bctx.arc(15, -10, 8, 0, Math.PI*2); bctx.fill();
+            bctx.restore();
+
+            // Draw Projectiles
+            battle.projectiles.forEach(p => {
+                bctx.fillStyle = p.color;
+                bctx.shadowBlur = 10; bctx.shadowColor = p.color;
+                bctx.beginPath(); bctx.arc(p.x, p.y, 6, 0, Math.PI*2); bctx.fill();
+            });
+
+            battle.enemyShots.forEach(p => {
+                bctx.fillStyle = p.type === 'shadow' ? '#1e1b4b' : '#9333ea';
+                bctx.shadowBlur = 10; bctx.shadowColor = p.type === 'shadow' ? '#000' : '#d8b4fe';
+                bctx.beginPath(); bctx.arc(p.x, p.y, p.type === 'shadow' ? 10 : 8, 0, Math.PI*2); bctx.fill();
+            });
+
+            // Draw Particles
+            battle.particles.forEach(p => {
+                bctx.fillStyle = p.color;
+                bctx.globalAlpha = p.life / 20;
+                bctx.beginPath(); bctx.arc(p.x, p.y, 3, 0, Math.PI*2); bctx.fill();
+                bctx.globalAlpha = 1.0;
+            });
+        }
+
+        function bossLoop() {
+            updateBattle();
+            drawBoss();
+            if(bossActive) requestAnimationFrame(bossLoop);
+        }
+
+        // Add Fort Button Trigger
+        function openFortBattle() {
+            document.getElementById('scene-map').classList.add('hidden');
+            document.getElementById('scene-boss').classList.remove('hidden');
+        }
+        // ============================
+        // INIT
+        // ============================
+        initMap();
+
+    </script>
+</body>
+</html>
